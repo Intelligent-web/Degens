@@ -27,7 +27,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;borde
 <div id="msg"></div></div>
 <div class="card w"><b>Bots</b> <span class="mu">— fund each wallet with SOL (buy amount + fees)</span>
 <table><thead><tr><th>#</th><th>Wallet</th><th>Status</th><th>Entry SOL</th><th>Target</th><th>Note</th></tr></thead><tbody id="rows"></tbody></table>
-<button class="gr" style="margin-top:12px" onclick="act('setup')">Create 10 bot wallets</button></div>
+<button class="gr" style="margin-top:12px" onclick="act('setup')">Create 10 bot wallets</button>
+<div style="margin-top:14px"><label class="mu">Withdraw leftover SOL to (your wallet address)</label><input id="withdraw_to" placeholder="your Phantom address">
+<button class="gr" onclick="if(confirm('Send leftover SOL from all idle/sold bots to this address?'))act('withdraw')">Withdraw</button></div></div>
 </div>
 <script>
 const SUPABASE_URL="YOUR_SUPABASE_URL",SUPABASE_ANON_KEY="YOUR_SUPABASE_ANON_KEY";
@@ -39,7 +41,7 @@ $("login").style.display="none";$("app").style.display="block";
 const{data:c}=await sb.from("bot_config").select("*").single();if(c)F.forEach(f=>$(f).value=c[f]??"");refresh();setInterval(refresh,4000)}
 async function refresh(){const{data}=await sb.from("bots").select("*").order("id");
 $("rows").innerHTML=(data||[]).map(b=>`<tr><td>${b.id}</td><td title="${b.pubkey}">${b.pubkey.slice(0,4)}…${b.pubkey.slice(-4)}</td><td>${b.status}</td><td>${b.sol_in||"-"}</td><td>${b.tp?(+b.tp).toFixed(2)+"x":"-"}</td><td class="mu">${b.note||""}</td></tr>`).join("")}
-async function act(action){$("msg").textContent=action+"…";const config={};F.forEach(f=>config[f]=$(f).value);
+async function act(action){$("msg").textContent=action+"…";const config={};F.forEach(f=>config[f]=$(f).value);config.withdraw_to=$("withdraw_to").value;
 const{data,error}=await sb.functions.invoke("bot",{body:{action,config}});
 $("msg").textContent=error?("Error: "+error.message):(data&&data.error)?("Error: "+data.error):(action+" done");refresh()}
 start();
