@@ -32,7 +32,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;borde
 <button class="gr" onclick="if(confirm('Send leftover SOL from all idle/sold bots to this address?'))act('withdraw')">Withdraw</button></div></div>
 </div>
 <script>
-const SUPABASE_URL="YOUR_SUPABASE_URL",SUPABASE_ANON_KEY="YOUR_SUPABASE_ANON_KEY";
+const SUPABASE_URL="https://ihnmjdeqgbbobqxdosoa.supabase.co",SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlobm1qZGVxZ2Jib2JxeGRvc29hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3NjgxNDksImV4cCI6MjEwODM0NDE0OX0.Di_TYD0EuuqTc_s_xgn2SIu1QnBkin1xOw6Qu3cz6Pw";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const $=i=>document.getElementById(i),F=["mint","buy_sol","tp_min","tp_max","slippage_bps"];
 async function login(){const{error}=await sb.auth.signInWithPassword({email:$("em").value,password:$("pw").value});if(error)return alert(error.message);start()}
