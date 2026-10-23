@@ -16,6 +16,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;borde
 <h2>10-Bot Trader</h2>
 <div class="card" id="login"><b>Admin login</b><input id="em" placeholder="email"><input id="pw" type="password" placeholder="password"><button onclick="login()">Sign in</button></div>
 <div id="app" style="display:none">
+<div style="text-align:right;margin-bottom:8px"><button class="gr" style="margin:0" onclick="logout()">Log out</button></div>
 <div class="card"><b>Target</b>
 <label class="mu">Contract address (CA)</label><input id="mint">
 <div class="row"><div><label class="mu">Buy per bot (SOL)</label><input id="buy_sol" type="number" step="0.01"></div>
@@ -45,6 +46,7 @@ $("rows").innerHTML=(data||[]).map(b=>`<tr><td>${b.id}</td><td title="${b.pubkey
 async function act(action){$("msg").textContent=action+"…";const config={};F.forEach(f=>config[f]=$(f).value);config.withdraw_to=$("withdraw_to").value;
 const{data,error}=await sb.functions.invoke("bot",{body:{action,config}});
 $("msg").textContent=error?("Error: "+error.message):(data&&data.error)?("Error: "+data.error):(action+" done");refresh();if(action==="setup")buildAmts()}
+async function logout(){await sb.auth.signOut();location.reload()}
 let botIds=[];
 async function buildAmts(){const{data}=await sb.from("bots").select("id,buy_sol").order("id");botIds=(data||[]).map(b=>b.id);
 $("amts").innerHTML=(data||[]).map(b=>`<div><label class="mu">Bot ${b.id}</label><input id="amt${b.id}" type="number" step="0.0001" min="0" placeholder="default" value="${b.buy_sol??""}"></div>`).join("")}
