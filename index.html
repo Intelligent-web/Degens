@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>10-Bot Trader</title>
+<title>PHANTOM TRADER</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
 :root{--bg:#0e1411;--card:#17201b;--tx:#e6f0e9;--mu:#8aa093;--ac:#3ddc84;--rd:#ff5a5a}
@@ -22,7 +22,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;borde
 <div class="row"><div><label class="mu">Buy per bot (SOL)</label><input id="buy_sol" type="number" step="0.01"></div>
 <div><label class="mu">Take-profit min (x)</label><input id="tp_min" type="number" step="0.1"></div>
 <div><label class="mu">Take-profit max (x)</label><input id="tp_max" type="number" step="0.1"></div>
-<div><label class="mu">Slippage (bps)</label><input id="slippage_bps" type="number"></div></div>
+<div><label class="mu">Slippage (bps)</label><input id="slippage_bps" type="number"></div>
+<div><label class="mu">Stop-loss (x, 0 = off)</label><input id="stop_loss" type="number" step="0.05"></div>
+<div><label class="mu">Max hold (minutes, 0 = off)</label><input id="max_hold_min" type="number"></div></div>
 <button class="gr" onclick="act('save')">Save CA</button><button onclick="act('run')">Run</button>
 <button class="gr" onclick="act('stop')">Stop</button><button class="red" onclick="if(confirm('Sell ALL bot holdings now?'))act('sellall')">Sell All</button>
 <div id="msg"></div></div>
@@ -36,7 +38,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;borde
 <script>
 const SUPABASE_URL="https://ihnmjdeqgbbobqxdosoa.supabase.co",SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlobm1qZGVxZ2Jib2JxeGRvc29hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3NjgxNDksImV4cCI6MjEwODM0NDE0OX0.Di_TYD0EuuqTc_s_xgn2SIu1QnBkin1xOw6Qu3cz6Pw";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-const $=i=>document.getElementById(i),F=["mint","buy_sol","tp_min","tp_max","slippage_bps"];
+const $=i=>document.getElementById(i),F=["mint","buy_sol","tp_min","tp_max","slippage_bps","stop_loss","max_hold_min"];
 async function login(){const{error}=await sb.auth.signInWithPassword({email:$("em").value,password:$("pw").value});if(error)return alert(error.message);start()}
 async function start(){const{data:{session}}=await sb.auth.getSession();if(!session)return;
 $("login").style.display="none";$("app").style.display="block";
