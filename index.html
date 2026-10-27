@@ -28,14 +28,14 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;borde
 <div><label class="mu">Stop-loss (x, 0 = off)</label><input id="stop_loss" type="number" step="0.05"></div>
 <div><label class="mu">Max hold (minutes, 0 = off)</label><input id="max_hold_min" type="number"></div></div>
 <button class="gr" onclick="act('save')">Save CA</button><button onclick="act('run')">Run</button>
-<button class="gr" onclick="act('stop')">Stop</button><button class="red" onclick="if(confirm('Sell ALL bot holdings now?'))act('sellall')">Sell All</button>
+<button class="gr" onclick="act('stop')">Stop</button><button class="red" onclick="ask('Sell ALL bot holdings now?','Sell All',true).then(y=>y&&act('sellall'))">Sell All</button>
 <div id="msg"></div></div>
 <div class="card"><b>Buy amount per bot (SOL)</b> <span class="mu">— blank = use the default above, 0 = that bot sits out</span><div class="row" id="amts" style="margin-top:10px"></div><button class="gr" onclick="saveAmts()">Save amounts</button></div>
 <div class="card w"><b>Bots</b> <span class="mu">— fund each wallet with SOL (buy amount + fees)</span>
-<table><thead><tr><th>#</th><th>Wallet</th><th>Status</th><th>Entry SOL</th><th>Target</th><th>Note</th></tr></thead><tbody id="rows"></tbody></table>
-<button class="gr" style="margin-top:12px" onclick="act('setup')">Create 10 bot wallets</button>
+<table><thead><tr><th>#</th><th>Wallet</th><th>Status</th><th>Entry SOL</th><th>Target</th><th>Note</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+<button title="Add bot" onclick="act('addbot')" style="margin-top:12px;background:#3ddc84;font-size:20px;width:46px;height:46px;padding:0;border-radius:10px">➕</button> <span class="mu">Add bot</span>
 <div style="margin-top:14px"><label class="mu">Withdraw leftover SOL to (your wallet address)</label><input id="withdraw_to" placeholder="your Phantom address">
-<button class="gr" onclick="if(confirm('Send leftover SOL from all idle/sold bots to this address?'))act('withdraw')">Withdraw</button></div></div>
+<button class="gr" onclick="ask('Send leftover SOL from all idle/sold bots to the address you entered? This cannot be undone.','Withdraw',true).then(y=>y&&act('withdraw'))">Withdraw</button></div></div>
 </div>
 <div id="tab-snipe" style="display:none">
 <div class="card"><b>Sniper settings</b> <span class="mu">— buys brand-new pump.fun tokens at launch, one bot per token</span>
@@ -51,18 +51,19 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;borde
 <label class="mu"><input type="checkbox" id="s_social" style="width:auto;margin-right:8px">Only tokens with a website, Twitter or Telegram link</label><br>
 <label class="mu"><input type="checkbox" id="s_paper" style="width:auto;margin-right:8px">Paper mode (simulated, no real money)</label><br><br>
 <button class="gr" onclick="snipeSave()">Save settings</button><button onclick="snipeSave().then(ok=>ok&&sact('snipe_run'))">Start</button><button class="gr" onclick="sact('snipe_stop')">Stop</button>
-<button class="red" onclick="if(confirm('Sell all sniper positions now?'))sact('snipe_sellall')">Sell All</button>
+<button class="red" onclick="ask('Sell all sniper positions now?','Sell All',true).then(y=>y&&sact('snipe_sellall'))">Sell All</button>
 <div id="smsg" class="mu" style="margin-top:8px"></div></div>
 <div class="card"><b>Bots</b> <span class="mu">— blank = use the defaults above. Fund each wallet with its buy amount + ~0.01 SOL.</span>
 <div class="w"><table><thead><tr><th>#</th><th>Wallet</th><th>On</th><th>Buy SOL</th><th>Sell min x</th><th>Sell max x</th></tr></thead><tbody id="sbots"></tbody></table></div>
 <div class="row" style="margin-top:10px"><div><label class="mu">Total bots to have (max 20)</label><input id="s_count" type="number" value="5"></div></div>
 <button class="gr" onclick="sact('snipe_setup')">Create bots</button></div>
-<div class="card"><b>Sell All + transfer everything</b><input id="s_to" placeholder="your Phantom address"><button class="red" onclick="if(confirm('Sell everything and send ALL SOL to this address?'))sact('snipe_sweep')">Sell All &amp; Transfer</button></div>
+<div class="card"><b>Sell All + transfer everything</b><input id="s_to" placeholder="your Phantom address"><button class="red" onclick="ask('Sell everything and send ALL SOL from every sniper bot to the address you entered? This cannot be undone.','Sell & Transfer',true).then(y=>y&&sact('snipe_sweep'))">Sell All &amp; Transfer</button></div>
 </div>
 <div id="tab-dash" style="display:none"><div class="card"><b>Summary</b><div id="dsum" style="margin-top:8px"></div></div>
 <div class="card w"><b>Currently holding</b><table><thead><tr><th>Bot</th><th>Token</th><th>Entry SOL</th><th>Target</th><th>Status</th><th>Now</th></tr></thead><tbody id="dopen"></tbody></table></div></div>
 <div id="tab-hist" style="display:none"><div class="card w"><b>Trade history</b> <span class="mu">— live PnL = real wallet change incl. fees</span><table><thead><tr><th>Closed</th><th>Bot</th><th>Token</th><th>In</th><th>Out</th><th>PnL (SOL)</th><th>Why</th><th></th></tr></thead><tbody id="hrows"></tbody></table></div></div>
 </div>
+<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:50"><div class="card" style="max-width:360px;margin:16px"><b>Are you sure?</b><p id="mtext" class="mu"></p><div style="text-align:right"><button class="gr" id="mno">Cancel</button><button id="mok" style="margin:0">Confirm</button></div></div></div>
 <script>
 const SUPABASE_URL="https://ihnmjdeqgbbobqxdosoa.supabase.co",SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlobm1qZGVxZ2Jib2JxeGRvc29hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3NjgxNDksImV4cCI6MjEwODM0NDE0OX0.Di_TYD0EuuqTc_s_xgn2SIu1QnBkin1xOw6Qu3cz6Pw";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
@@ -72,10 +73,10 @@ async function start(){const{data:{session}}=await sb.auth.getSession();if(!sess
 $("login").style.display="none";$("app").style.display="block";
 const{data:c}=await sb.from("bot_config").select("*").single();if(c)F.forEach(f=>$(f).value=c[f]??"");buildAmts();refresh();setInterval(refresh,4000);setInterval(()=>{if($("tab-dash").style.display==="block"||$("tab-hist").style.display==="block")loadDash()},5000)}
 async function refresh(){const{data}=await sb.from("bots").select("*").order("id");
-$("rows").innerHTML=(data||[]).map(b=>`<tr><td>${b.id}</td><td title="${b.pubkey}">${b.pubkey.slice(0,4)}…${b.pubkey.slice(-4)}</td><td>${b.status}</td><td>${b.sol_in||"-"}</td><td>${b.tp?(+b.tp).toFixed(2)+"x":"-"}</td><td class="mu">${esc(b.note)}</td></tr>`).join("")}
+$("rows").innerHTML=(data||[]).map(b=>`<tr><td>${b.id}</td><td title="${b.pubkey}">${b.pubkey.slice(0,4)}…${b.pubkey.slice(-4)}</td><td>${b.status}</td><td>${b.sol_in||"-"}</td><td>${b.tp?(+b.tp).toFixed(2)+"x":"-"}</td><td class="mu">${esc(b.note)}</td><td><button class="red" title="Delete bot" style="margin:0;padding:4px 8px" onclick="delBot(${b.id})">🗑️</button></td></tr>`).join("")}
 async function act(action){$("msg").textContent=action+"…";const config={};F.forEach(f=>config[f]=$(f).value);config.withdraw_to=$("withdraw_to").value;
 const{data,error}=await sb.functions.invoke("bot",{body:{action,config}});
-$("msg").textContent=error?("Error: "+error.message):(data&&data.error)?("Error: "+data.error):(action+" done");refresh();if(action==="setup")buildAmts()}
+$("msg").textContent=error?("Error: "+error.message):(data&&data.error)?("Error: "+data.error):(action+" done");refresh();if(action==="setup"||action==="addbot")buildAmts()}
 async function logout(){await sb.auth.signOut();location.reload()}
 let botIds=[];
 async function buildAmts(){const{data}=await sb.from("bots").select("id,buy_sol").order("id");botIds=(data||[]).map(b=>b.id);
@@ -103,5 +104,10 @@ const open=(b||[]).filter(x=>x.status==="holding"||x.status==="selling"),tr=t||[
 $("dsum").innerHTML=`Open: <b>${open.length}</b> &nbsp; Closed: <b>${tr.length}</b> &nbsp; Win rate: <b>${tr.length?Math.round(wins/tr.length*100):0}%</b> &nbsp; Total PnL: <b>${pc(pnl)} SOL</b>`;
 $("dopen").innerHTML=open.map(x=>`<tr><td>${x.id}</td><td>${esc(x.symbol)} <span class="mu">${esc((x.mint||"").slice(0,4))}…</span></td><td>${x.sol_in}</td><td>${x.tp?(+x.tp).toFixed(2)+"x":"-"}</td><td>${esc(x.status)}</td><td class="mu">${esc(x.note)}</td></tr>`).join("");
 $("hrows").innerHTML=tr.map(x=>`<tr><td>${new Date(x.closed_at).toLocaleString()}</td><td>${x.bot_id}</td><td>${esc(x.symbol)}</td><td>${(+x.sol_in).toFixed(4)}</td><td>${(+x.sol_out).toFixed(4)}</td><td>${pc(+x.pnl_sol)}</td><td class="mu">${esc(x.reason)}</td><td class="mu">${x.paper?"paper":"live"}</td></tr>`).join("")}
+function ask(msg,ok,danger){return new Promise(res=>{$("mtext").textContent=msg;const b=$("mok");b.textContent=ok||"Confirm";b.className=danger?"red":"";$("modal").style.display="flex";
+const done=v=>{$("modal").style.display="none";b.onclick=null;$("mno").onclick=null;res(v)};b.onclick=()=>done(true);$("mno").onclick=()=>done(false)})}
+async function delBot(id){if(!await ask("Delete Bot "+id+"? Its private key is erased for good. Only do this if the wallet is empty.","Delete",true))return;
+$("msg").textContent="deleting…";const{data,error}=await sb.functions.invoke("bot",{body:{action:"deletebot",config:{id}}});
+$("msg").textContent=error?("Error: "+error.message):(data&&data.error)?("Error: "+data.error):"bot deleted";refresh();buildAmts()}
 start();
 </script></body></html>
