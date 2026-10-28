@@ -21,7 +21,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;borde
 <div id="tab-target">
 <div class="card"><b>Target</b>
 <label class="mu">Contract address (CA)</label><input id="mint">
-<div class="row"><div><label class="mu">Buy per bot (SOL)</label><input id="buy_sol" type="number" step="0.01"></div>
+<div class="row">
 <div><label class="mu">Take-profit min (x)</label><input id="tp_min" type="number" step="0.1"></div>
 <div><label class="mu">Take-profit max (x)</label><input id="tp_max" type="number" step="0.1"></div>
 <div><label class="mu">Slippage (bps)</label><input id="slippage_bps" type="number"></div>
@@ -30,9 +30,11 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;borde
 <button class="gr" onclick="act('save')">Save CA</button><button onclick="act('run')">Run</button>
 <button class="gr" onclick="act('stop')">Stop</button><button class="red" onclick="ask('Sell ALL bot holdings now?','Sell All',true).then(y=>y&&act('sellall'))">Sell All</button>
 <div id="msg"></div></div>
-<div class="card"><b>Buy amount per bot (SOL)</b> <span class="mu">— blank = use the default above, 0 = that bot sits out</span><div class="row" id="amts" style="margin-top:10px"></div><button class="gr" onclick="saveAmts()">Save amounts</button></div>
+<div class="card"><b>Buy amount per bot (SOL)</b> <span class="mu">— blank or 0 = that bot sits out</span><div class="row" id="amts" style="margin-top:10px"></div><button class="gr" onclick="saveAmts()">Save amounts</button></div>
 <div class="card w"><b>Bots</b> <span class="mu">— fund each wallet with SOL (buy amount + fees)</span>
-<table><thead><tr><th>#</th><th>Wallet</th><th>Status</th><th>Entry SOL</th><th>Target</th><th>Note</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+<div id="livetotal" class="mu" style="margin:8px 0"></div>
+<table><thead><tr><th>#</th><th>Wallet</th><th>Status</th><th>Entry SOL</th><th>Now (SOL)</th><th>PnL (SOL)</th><th>Target</th><th>Note</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+<div class="mu" style="margin-top:6px;font-size:12px">Live values are estimates from a sell quote (before network fees) and refresh every few seconds.</div>
 <button title="Add bot" onclick="act('addbot')" style="margin-top:12px;background:#3ddc84;font-size:20px;width:46px;height:46px;padding:0;border-radius:10px">➕</button> <span class="mu">Add bot</span>
 <div style="margin-top:14px"><label class="mu">Withdraw leftover SOL to (your wallet address)</label><input id="withdraw_to" placeholder="your Phantom address">
 <button class="gr" onclick="ask('Send leftover SOL from all idle/sold bots to the address you entered? This cannot be undone.','Withdraw',true).then(y=>y&&act('withdraw'))">Withdraw</button></div></div>
@@ -67,13 +69,28 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;borde
 <script>
 const SUPABASE_URL="https://ihnmjdeqgbbobqxdosoa.supabase.co",SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlobm1qZGVxZ2Jib2JxeGRvc29hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3NjgxNDksImV4cCI6MjEwODM0NDE0OX0.Di_TYD0EuuqTc_s_xgn2SIu1QnBkin1xOw6Qu3cz6Pw";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-const $=i=>document.getElementById(i),F=["mint","buy_sol","tp_min","tp_max","slippage_bps","stop_loss","max_hold_min"];
+const $=i=>document.getElementById(i),F=["mint","tp_min","tp_max","slippage_bps","stop_loss","max_hold_min"];
 async function login(){const{error}=await sb.auth.signInWithPassword({email:$("em").value,password:$("pw").value});if(error)return alert(error.message);start()}
 async function start(){const{data:{session}}=await sb.auth.getSession();if(!session)return;
 $("login").style.display="none";$("app").style.display="block";
-const{data:c}=await sb.from("bot_config").select("*").single();if(c)F.forEach(f=>$(f).value=c[f]??"");buildAmts();refresh();setInterval(refresh,4000);setInterval(()=>{if($("tab-dash").style.display==="block"||$("tab-hist").style.display==="block")loadDash()},5000)}
-async function refresh(){const{data}=await sb.from("bots").select("*").order("id");
-$("rows").innerHTML=(data||[]).map(b=>`<tr><td>${b.id}</td><td title="${b.pubkey}">${b.pubkey.slice(0,4)}…${b.pubkey.slice(-4)}</td><td>${b.status}</td><td>${b.sol_in||"-"}</td><td>${b.tp?(+b.tp).toFixed(2)+"x":"-"}</td><td class="mu">${esc(b.note)}</td><td><button class="red" title="Delete bot" style="margin:0;padding:4px 8px" onclick="delBot(${b.id})">🗑️</button></td></tr>`).join("")}
+const{data:c}=await sb.from("bot_config").select("*").single();if(c)F.forEach(f=>$(f).value=c[f]??"");buildAmts();refresh();setInterval(refresh,4000);setInterval(pollPrices,6000);setInterval(()=>{if($("tab-dash").style.display==="block"||$("tab-hist").style.display==="block")loadDash()},5000)}
+let botsData=[],live={},polling=false;
+async function refresh(){const{data}=await sb.from("bots").select("*").order("id");botsData=data||[];renderBots()}
+const col=n=>n>=0?"var(--ac)":"var(--rd)",sg=n=>(n>=0?"+":"");
+function renderBots(){
+let entry=0,now=0,counted=0;
+$("rows").innerHTML=botsData.map(b=>{
+const sin=+b.sol_in||0,v=live[b.id];let nowTxt="-",pnlTxt="-";
+if(b.status==="holding"&&sin>0&&v!=null){const d=v-sin,p=d/sin*100;entry+=sin;now+=v;counted++;
+nowTxt=`<span style="color:${col(d)}">${v.toFixed(4)}</span>`;
+pnlTxt=`<span style="color:${col(d)}">${sg(d)}${d.toFixed(4)} (${sg(d)}${p.toFixed(1)}%)</span>`}
+const tgt=b.tp?`${(+b.tp).toFixed(2)}x${sin>0?` <span class="mu">(${(sin*b.tp).toFixed(4)} SOL)</span>`:""}`:"-";
+return `<tr><td>${b.id}</td><td title="${esc(b.pubkey)}">${esc(b.pubkey.slice(0,4))}…${esc(b.pubkey.slice(-4))}</td><td>${esc(b.status)}</td><td>${b.sol_in||"-"}</td><td>${nowTxt}</td><td>${pnlTxt}</td><td>${tgt}</td><td class="mu">${esc(b.note)}</td><td><button class="red" title="Delete bot" style="margin:0;padding:4px 8px" onclick="delBot(${b.id})">🗑️</button></td></tr>`}).join("");
+if(counted){const d=now-entry,p=d/entry*100;$("livetotal").innerHTML=`Holding <b>${counted}</b> bot(s) · Entry <b>${entry.toFixed(4)}</b> SOL · Now <b>${now.toFixed(4)}</b> SOL · Unrealised PnL <b style="color:${col(d)}">${sg(d)}${d.toFixed(4)} SOL (${sg(d)}${p.toFixed(1)}%)</b>`}
+else $("livetotal").textContent=""}
+async function pollPrices(){if(polling||document.hidden||$("tab-target").style.display==="none"||!botsData.some(b=>b.status==="holding"))return;polling=true;
+try{const{data}=await sb.functions.invoke("bot",{body:{action:"prices",config:{}}});if(data&&data.prices){live=data.prices;renderBots()}}catch(e){}
+polling=false}
 async function act(action){$("msg").textContent=action+"…";const config={};F.forEach(f=>config[f]=$(f).value);config.withdraw_to=$("withdraw_to").value;
 const{data,error}=await sb.functions.invoke("bot",{body:{action,config}});
 let m=action+" done";
@@ -82,13 +99,13 @@ $("msg").textContent=m;refresh();if(action==="setup"||action==="addbot")buildAmt
 async function logout(){await sb.auth.signOut();location.reload()}
 let botIds=[];
 async function buildAmts(){const{data}=await sb.from("bots").select("id,buy_sol").order("id");botIds=(data||[]).map(b=>b.id);
-$("amts").innerHTML=(data||[]).map(b=>`<div><label class="mu">Bot ${b.id}</label><input id="amt${b.id}" type="number" step="0.0001" min="0" placeholder="default" value="${b.buy_sol??""}"></div>`).join("")}
+$("amts").innerHTML=(data||[]).map(b=>`<div><label class="mu">Bot ${b.id}</label><input id="amt${b.id}" type="number" step="0.0001" min="0" placeholder="none" value="${b.buy_sol??""}"></div>`).join("")}
 async function saveAmts(){$("msg").textContent="saving amounts…";
 const{data,error}=await sb.functions.invoke("bot",{body:{action:"amounts",config:{amounts:botIds.map(id=>$("amt"+id).value)}}});
 $("msg").textContent=error?("Error: "+error.message):(data&&data.error)?("Error: "+data.error):"amounts saved"}
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const SF=["max_mc_usd","buy_sol","tp_min","tp_max","stop_loss","max_hold_min","slippage_bps","max_dev_sol"];
-function tab(t){["target","snipe","dash","hist"].forEach(x=>$("tab-"+x).style.display=x===t?"block":"none");if(t==="snipe")buildSnipe();if(t==="dash"||t==="hist")loadDash()}
+function tab(t){["target","snipe","dash","hist"].forEach(x=>$("tab-"+x).style.display=x===t?"block":"none");if(t==="snipe")buildSnipe();if(t==="dash"||t==="hist")loadDash();if(t==="target")pollPrices()}
 async function buildSnipe(){const{data:c}=await sb.from("snipe_config").select("*").single();
 if(c){SF.forEach(f=>$("s_"+f).value=c[f]??"");$("s_paper").checked=!!c.paper;$("s_social").checked=!!c.require_social}
 const{data}=await sb.from("snipe_bots").select("*").order("id");
