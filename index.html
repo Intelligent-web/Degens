@@ -11,7 +11,7 @@ input{width:100%;padding:10px;border-radius:8px;border:1px solid #2b3a31;backgro
 button{padding:10px 18px;border:0;border-radius:8px;font-weight:700;cursor:pointer;background:var(--ac);color:#06210f;margin-right:8px}
 button.red{background:var(--rd);color:#fff}button.gr{background:#2b3a31;color:var(--tx)}
 table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;border-bottom:1px solid #2b3a31;text-align:left}
-.mu{color:var(--mu)}.w{overflow-x:auto}#msg{color:var(--mu);margin-top:8px}
+.mu{color:var(--mu)}.w{overflow-x:auto}#msg{color:var(--mu);margin-top:8px;white-space:pre-line}
 </style></head><body>
 <h2>10-Bot Trader</h2>
 <div class="card" id="login"><b>Admin login</b><input id="em" placeholder="email"><input id="pw" type="password" placeholder="password"><button onclick="login()">Sign in</button></div>
@@ -76,7 +76,9 @@ async function refresh(){const{data}=await sb.from("bots").select("*").order("id
 $("rows").innerHTML=(data||[]).map(b=>`<tr><td>${b.id}</td><td title="${b.pubkey}">${b.pubkey.slice(0,4)}…${b.pubkey.slice(-4)}</td><td>${b.status}</td><td>${b.sol_in||"-"}</td><td>${b.tp?(+b.tp).toFixed(2)+"x":"-"}</td><td class="mu">${esc(b.note)}</td><td><button class="red" title="Delete bot" style="margin:0;padding:4px 8px" onclick="delBot(${b.id})">🗑️</button></td></tr>`).join("")}
 async function act(action){$("msg").textContent=action+"…";const config={};F.forEach(f=>config[f]=$(f).value);config.withdraw_to=$("withdraw_to").value;
 const{data,error}=await sb.functions.invoke("bot",{body:{action,config}});
-$("msg").textContent=error?("Error: "+error.message):(data&&data.error)?("Error: "+data.error):(action+" done");refresh();if(action==="setup"||action==="addbot")buildAmts()}
+let m=action+" done";
+if(error)m="Error: "+error.message;else if(data&&data.error)m="Error: "+data.error;else if(data&&data.results&&data.results.length)m=action+":\n"+data.results.join("\n");
+$("msg").textContent=m;refresh();if(action==="setup"||action==="addbot")buildAmts()}
 async function logout(){await sb.auth.signOut();location.reload()}
 let botIds=[];
 async function buildAmts(){const{data}=await sb.from("bots").select("id,buy_sol").order("id");botIds=(data||[]).map(b=>b.id);
