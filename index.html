@@ -1,129 +1,327 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>10-Bot Trader</title>
+<title>Bot Trader</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
-:root{--bg:#0e1411;--card:#17201b;--tx:#e6f0e9;--mu:#8aa093;--ac:#3ddc84;--rd:#ff5a5a}
-*{box-sizing:border-box}body{margin:0;font:15px system-ui;background:var(--bg);color:var(--tx);padding:16px;max-width:900px;margin:auto}
+:root{--bg:#0e1411;--card:#17201b;--tx:#e6f0e9;--mu:#8aa093;--ac:#3ddc84;--rd:#ff5a5a;--am:#f5b942}
+*{box-sizing:border-box}body{margin:0;font:15px system-ui;background:var(--bg);color:var(--tx);padding:16px;max-width:1000px;margin:auto}
 .card{background:var(--card);border-radius:12px;padding:16px;margin-bottom:14px}
 input{width:100%;padding:10px;border-radius:8px;border:1px solid #2b3a31;background:#0e1411;color:var(--tx);margin:4px 0 10px}
-.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
-button{padding:10px 18px;border:0;border-radius:8px;font-weight:700;cursor:pointer;background:var(--ac);color:#06210f;margin-right:8px}
-button.red{background:var(--rd);color:#fff}button.gr{background:#2b3a31;color:var(--tx)}
+input[type=checkbox]{width:auto;margin:0 6px 0 0}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+button{padding:10px 18px;border:0;border-radius:8px;font-weight:700;cursor:pointer;background:var(--ac);color:#06210f;margin:0 8px 6px 0}
+button.red{background:var(--rd);color:#fff}button.gr{background:#2b3a31;color:var(--tx)}button.sm{padding:4px 10px;margin:0}
 table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;border-bottom:1px solid #2b3a31;text-align:left}
-.mu{color:var(--mu)}.w{overflow-x:auto}#msg{color:var(--mu);margin-top:8px;white-space:pre-line}#smsg{white-space:pre-line}
+.mu{color:var(--mu)}.w{overflow-x:auto}#msg{color:var(--mu);margin-top:8px;white-space:pre-line}
+.top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.bot{background:#101813;border:1px solid #2b3a31;border-radius:10px;padding:12px;margin-bottom:10px}
+.bh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.badge{padding:2px 10px;border-radius:99px;font-size:12px;background:#2b3a31}
+.cell{font-size:12px;color:var(--mu)}.cell .v{font-size:14px;font-weight:600;color:var(--tx);margin-top:6px;min-height:20px}
+.cell input{margin:4px 0 0}
+.note{font-size:12px;margin-top:6px;word-break:break-word}
+.opt{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:13px}
+.opt label{display:flex;align-items:center}.opt input[type=number]{width:90px;margin:0}
+.mono{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all}
+#modal table{margin:8px 0}
 </style></head><body>
-<h2>10-Bot Trader</h2>
+<h2>Bot Trader</h2>
 <div class="card" id="login"><b>Admin login</b><input id="em" placeholder="email"><input id="pw" type="password" placeholder="password"><button onclick="login()">Sign in</button></div>
+
 <div id="app" style="display:none">
-<div style="text-align:right;margin-bottom:8px"><button class="gr" style="margin:0" onclick="logout()">Log out</button></div>
-<div style="margin-bottom:14px"><button class="gr" onclick="tab('target')">Target Bot</button><button class="gr" onclick="tab('snipe')">Sniper</button><button class="gr" onclick="tab('dash')">Dashboard</button><button class="gr" onclick="tab('hist')">History</button></div>
-<div id="tab-target">
-<div class="card"><b>Target</b>
-<label class="mu">Contract address (CA)</label><input id="mint">
-<div class="row">
-<div><label class="mu">Take-profit min (x)</label><input id="tp_min" type="number" step="0.1"></div>
-<div><label class="mu">Take-profit max (x)</label><input id="tp_max" type="number" step="0.1"></div>
-<div><label class="mu">Slippage (bps)</label><input id="slippage_bps" type="number"></div>
-<div><label class="mu">Stop-loss (x, 0 = off)</label><input id="stop_loss" type="number" step="0.05"></div>
-<div><label class="mu">Max hold (minutes, 0 = off)</label><input id="max_hold_min" type="number"></div></div>
-<button class="gr" onclick="act('save')">Save CA</button><button onclick="act('run')">Run</button>
-<button class="gr" onclick="act('stop')">Stop</button><button class="red" onclick="ask('Sell ALL bot holdings now?','Sell All',true).then(y=>y&&act('sellall'))">Sell All</button>
-<div id="msg"></div></div>
-<div class="card"><b>Buy amount per bot (SOL)</b> <span class="mu">— blank or 0 = that bot sits out</span><div class="row" id="amts" style="margin-top:10px"></div><button class="gr" onclick="saveAmts()">Save amounts</button></div>
-<div class="card w"><b>Bots</b> <span class="mu">— fund each wallet with SOL (buy amount + fees)</span>
-<div id="livetotal" class="mu" style="margin:8px 0"></div>
-<table><thead><tr><th>#</th><th>Wallet</th><th>Status</th><th>Entry SOL</th><th>Now (SOL)</th><th>PnL (SOL)</th><th>Target</th><th>Note</th><th></th></tr></thead><tbody id="rows"></tbody></table>
-<div class="mu" style="margin-top:6px;font-size:12px">Live values are estimates from a sell quote (before network fees) and refresh every few seconds.</div>
-<button title="Add bot" onclick="act('addbot')" style="margin-top:12px;background:#3ddc84;font-size:20px;width:46px;height:46px;padding:0;border-radius:10px">➕</button> <span class="mu">Add bot</span>
-<div style="margin-top:14px"><label class="mu">Withdraw leftover SOL to (your wallet address)</label><input id="withdraw_to" placeholder="your Phantom address">
-<button class="gr" onclick="ask('Send leftover SOL from all idle/sold bots to the address you entered? This cannot be undone.','Withdraw',true).then(y=>y&&act('withdraw'))">Withdraw</button></div></div>
+<div class="top">
+  <div><button id="m-target" onclick="setMode('target')">🎯 Target</button><button id="m-snipe" class="gr" onclick="setMode('snipe')">⚡ Sniper</button></div>
+  <div><span id="run" style="margin-right:10px"></span><button class="gr sm" onclick="logout()">Log out</button></div>
 </div>
-<div id="tab-snipe" style="display:none">
-<div class="card"><b>Sniper settings</b> <span class="mu">— buys brand-new pump.fun tokens at launch, one bot per token</span>
-<div class="row" style="margin-top:10px">
-<div><label class="mu">Max market cap at entry (USD)</label><input id="s_max_mc_usd" type="number"></div>
-<div><label class="mu">Stop-loss (x, 0 = off)</label><input id="s_stop_loss" type="number" step="0.05"></div>
-<div><label class="mu">Max hold (min, 0 = off)</label><input id="s_max_hold_min" type="number"></div>
-<div><label class="mu">Slippage (bps)</label><input id="s_slippage_bps" type="number"></div>
-<div><label class="mu">Max dev buy at launch (SOL, 0 = off)</label><input id="s_max_dev_sol" type="number" step="0.1"></div></div>
-<label class="mu"><input type="checkbox" id="s_social" style="width:auto;margin-right:8px">Only tokens with a website, Twitter or Telegram link</label><br>
-<label class="mu"><input type="checkbox" id="s_paper" style="width:auto;margin-right:8px">Paper mode (simulated, no real money)</label><br><br>
-<button class="gr" onclick="snipeSave()">Save settings</button><button onclick="snipeSave().then(ok=>ok&&sact('snipe_run'))">Start</button><button class="gr" onclick="sact('snipe_stop')">Stop</button>
-<button class="red" onclick="ask('Sell all sniper positions now?','Sell All',true).then(y=>y&&sact('snipe_sellall'))">Sell All</button>
-<div id="smsg" class="mu" style="margin-top:8px"></div></div>
-<div class="card"><b>Bots</b> <span class="mu">— set Buy SOL and Sell min/max x for every bot (blank = that bot sits out). Fund each wallet with its buy amount + ~0.01 SOL.</span>
-<div class="w"><table><thead><tr><th>#</th><th>Wallet</th><th>On</th><th>Buy SOL</th><th>Sell min x</th><th>Sell max x</th></tr></thead><tbody id="sbots"></tbody></table></div>
-<div class="row" style="margin-top:10px"><div><label class="mu">Total bots to have (max 20)</label><input id="s_count" type="number" value="5"></div></div>
-<button class="gr" onclick="sact('snipe_setup')">Create bots</button></div>
-<div class="card"><b>Sell All + transfer everything</b><input id="s_to" placeholder="your Phantom address"><button class="red" onclick="ask('Sell everything and send ALL SOL from every sniper bot to the address you entered? This cannot be undone.','Sell & Transfer',true).then(y=>y&&sact('snipe_sweep'))">Sell All &amp; Transfer</button></div>
+
+<div class="card"><b id="stitle"></b>
+  <div id="tgt" style="margin-top:10px">
+    <label class="mu">Contract address (CA)</label><input id="t_mint" placeholder="token contract address">
+    <div class="row">
+      <div><label class="mu">Take-profit min (x)</label><input id="t_tp_min" type="number" step="0.1"></div>
+      <div><label class="mu">Take-profit max (x)</label><input id="t_tp_max" type="number" step="0.1"></div>
+      <div><label class="mu">Slippage (bps)</label><input id="t_slippage_bps" type="number"></div>
+      <div><label class="mu">Stop-loss (x, 0 = off)</label><input id="t_stop_loss" type="number" step="0.05"></div>
+    </div>
+  </div>
+  <div id="snp" style="display:none;margin-top:10px">
+    <div class="row">
+      <div><label class="mu">Max market cap at entry (USD)</label><input id="s_max_mc_usd" type="number"></div>
+      <div><label class="mu">Stop-loss (x, 0 = off)</label><input id="s_stop_loss" type="number" step="0.05"></div>
+      <div><label class="mu">Max hold (min, 0 = off)</label><input id="s_max_hold_min" type="number"></div>
+      <div><label class="mu">Slippage (bps)</label><input id="s_slippage_bps" type="number"></div>
+    </div>
+    <div class="row">
+      <div><label class="mu">Max dev buy at launch (SOL, 0 = off)</label><input id="s_max_dev_sol" type="number" step="0.1"></div>
+    </div>
+    <label class="mu"><input type="checkbox" id="s_social">Only tokens with a website, Twitter or Telegram link</label><br>
+    <label class="mu"><input type="checkbox" id="s_paper">Paper mode (simulated, no real money)</label><br><br>
+  </div>
+  <div style="margin-top:6px">
+    <button class="gr" onclick="saveAll()">💾 Save settings</button><button onclick="startBots()">▶ Start</button><button class="gr" onclick="stopBots()">⏹ Stop</button><button class="red" onclick="sellAll()">Sell ALL</button>
+  </div>
+  <div id="msg"></div>
 </div>
-<div id="tab-dash" style="display:none"><div class="card"><b>Summary</b><div id="dsum" style="margin-top:8px"></div></div>
-<div class="card w"><b>Currently holding</b><table><thead><tr><th>Bot</th><th>Token</th><th>Entry SOL</th><th>Target</th><th>Status</th><th>Now</th></tr></thead><tbody id="dopen"></tbody></table></div></div>
-<div id="tab-hist" style="display:none"><div class="card w"><b>Trade history</b> <span class="mu">— live PnL = real wallet change incl. fees</span><table><thead><tr><th>Closed</th><th>Bot</th><th>Token</th><th>In</th><th>Out</th><th>PnL (SOL)</th><th>Why</th><th></th></tr></thead><tbody id="hrows"></tbody></table></div></div>
+
+<div class="card"><b>Bots</b> <span class="mu">— fund each wallet with its Buy SOL + ~0.01 SOL for fees. Stop-loss % / Take-profit % are optional: tick the box to use them for that bot.</span>
+  <div id="sum" class="mu" style="margin:8px 0"></div>
+  <div id="lines"></div>
+  <button class="gr" onclick="saveBots()">💾 Save bot settings</button><button class="gr" onclick="addBot()">🤖 Add bot</button>
 </div>
-<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:50"><div class="card" style="max-width:360px;margin:16px"><b>Are you sure?</b><p id="mtext" class="mu"></p><div style="text-align:right"><button class="gr" id="mno">Cancel</button><button id="mok" style="margin:0">Confirm</button></div></div></div>
+
+<div class="card"><b>Funding wallet</b> <span class="mu">— the source wallet that sends SOL to your bots (➕ on a bot, or distribute to all)</span>
+  <div id="fstat" style="margin:8px 0"></div>
+  <label class="mu">Seed phrase or private key (leave empty if already saved)</label>
+  <input id="fkey" type="password" autocomplete="off" placeholder="12/24-word seed phrase, base58 private key, or [byte array]">
+  <div class="row"><div><label class="mu">Account # (seed phrase only, 0 = first account)</label><input id="fidx" type="number" min="0" value="0"></div></div>
+  <button class="gr" onclick="saveFunding()">🔑 Save funding wallet</button><button onclick="fundAll()">➕ Distribute to all bots</button><button class="gr" onclick="getFund()">↻ Refresh balance</button><button class="red" onclick="clearFunding()">Remove key</button>
+  <div class="mu" style="font-size:12px">Use a dedicated wallet that holds only what you want the bots to trade — never your main wallet. The key is stored in your own Supabase table (service role only) and is never shown again.</div>
+</div>
+
+<div class="card"><b>Withdraw everything</b> <span class="mu">— all SOL and all tokens (any asset) from every bot in the current mode</span>
+  <input id="withdraw_to" placeholder="your wallet address (Phantom)">
+  <button class="red" onclick="withdrawAll()">Withdraw</button>
+</div>
+
+<div class="card w" id="hist" style="display:none"><b>Sniper trade history</b> <span class="mu">— PnL = real wallet change incl. fees</span>
+  <table><thead><tr><th>Closed</th><th>Bot</th><th>Token</th><th>In</th><th>Out</th><th>PnL (SOL)</th><th>Why</th><th></th></tr></thead><tbody id="hrows"></tbody></table>
+</div>
+</div>
+
+<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:50">
+  <div class="card" style="max-width:440px;width:calc(100% - 32px);margin:16px;max-height:88vh;overflow:auto">
+    <b id="mtitle">Are you sure?</b>
+    <div id="mtext" class="mu" style="margin:10px 0"></div>
+    <label id="mlab" class="mu"></label><input id="minp">
+    <div style="text-align:right"><button class="gr" id="mno">Cancel</button><button id="mok" style="margin-right:0">Confirm</button></div>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL="https://ihnmjdeqgbbobqxdosoa.supabase.co",SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlobm1qZGVxZ2Jib2JxeGRvc29hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3NjgxNDksImV4cCI6MjEwODM0NDE0OX0.Di_TYD0EuuqTc_s_xgn2SIu1QnBkin1xOw6Qu3cz6Pw";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-const $=i=>document.getElementById(i),F=["mint","tp_min","tp_max","slippage_bps","stop_loss","max_hold_min"];
-async function login(){const{error}=await sb.auth.signInWithPassword({email:$("em").value,password:$("pw").value});if(error)return alert(error.message);start()}
-async function start(){const{data:{session}}=await sb.auth.getSession();if(!session)return;
-$("login").style.display="none";$("app").style.display="block";
-const{data:c}=await sb.from("bot_config").select("*").single();if(c)F.forEach(f=>$(f).value=c[f]??"");buildAmts();refresh();setInterval(refresh,4000);setInterval(pollPrices,6000);setInterval(()=>{if($("tab-dash").style.display==="block"||$("tab-hist").style.display==="block")loadDash()},5000)}
-let botsData=[],live={},polling=false;
-async function refresh(){const{data}=await sb.from("bots").select("*").order("id");botsData=data||[];renderBots()}
-const col=n=>n>=0?"var(--ac)":"var(--rd)",sg=n=>(n>=0?"+":"");
-function renderBots(){
-let entry=0,now=0,counted=0;
-$("rows").innerHTML=botsData.map(b=>{
-const sin=+b.sol_in||0,v=live[b.id];let nowTxt="-",pnlTxt="-";
-if(b.status==="holding"&&sin>0&&v!=null){const d=v-sin,p=d/sin*100;entry+=sin;now+=v;counted++;
-nowTxt=`<span style="color:${col(d)}">${v.toFixed(4)}</span>`;
-pnlTxt=`<span style="color:${col(d)}">${sg(d)}${d.toFixed(4)} (${sg(d)}${p.toFixed(1)}%)</span>`}
-const tgt=b.tp?`${(+b.tp).toFixed(2)}x${sin>0?` <span class="mu">(${(sin*b.tp).toFixed(4)} SOL)</span>`:""}`:"-";
-return `<tr><td>${b.id}</td><td title="${esc(b.pubkey)}">${esc(b.pubkey.slice(0,4))}…${esc(b.pubkey.slice(-4))}</td><td>${esc(b.status)}</td><td>${b.sol_in||"-"}</td><td>${nowTxt}</td><td>${pnlTxt}</td><td>${tgt}</td><td class="mu">${esc(b.note)}</td><td><button class="red" title="Delete bot" style="margin:0;padding:4px 8px" onclick="delBot(${b.id})">🗑️</button></td></tr>`}).join("");
-if(counted){const d=now-entry,p=d/entry*100;$("livetotal").innerHTML=`Holding <b>${counted}</b> bot(s) · Entry <b>${entry.toFixed(4)}</b> SOL · Now <b>${now.toFixed(4)}</b> SOL · Unrealised PnL <b style="color:${col(d)}">${sg(d)}${d.toFixed(4)} SOL (${sg(d)}${p.toFixed(1)}%)</b>`}
-else $("livetotal").textContent=""}
-async function pollPrices(){if(polling||document.hidden||$("tab-target").style.display==="none"||!botsData.some(b=>b.status==="holding"))return;polling=true;
-try{const{data}=await sb.functions.invoke("bot",{body:{action:"prices",config:{}}});if(data&&data.prices){live=data.prices;renderBots()}}catch(e){}
-polling=false}
-async function act(action){$("msg").textContent=action+"…";const config={};F.forEach(f=>config[f]=$(f).value);config.withdraw_to=$("withdraw_to").value;
-const{data,error}=await sb.functions.invoke("bot",{body:{action,config}});
-let m=action+" done";
-if(error)m="Error: "+error.message;else if(data&&data.error)m="Error: "+data.error;else if(data&&data.results&&data.results.length)m=action+":\n"+data.results.join("\n");
-$("msg").textContent=m;refresh();if(action==="setup"||action==="addbot")buildAmts()}
-async function logout(){await sb.auth.signOut();location.reload()}
-let botIds=[];
-async function buildAmts(){const{data}=await sb.from("bots").select("id,buy_sol").order("id");botIds=(data||[]).map(b=>b.id);
-$("amts").innerHTML=(data||[]).map(b=>`<div><label class="mu">Bot ${b.id}</label><input id="amt${b.id}" type="number" step="0.0001" min="0" placeholder="none" value="${b.buy_sol??""}"></div>`).join("")}
-async function saveAmts(){$("msg").textContent="saving amounts…";
-const{data,error}=await sb.functions.invoke("bot",{body:{action:"amounts",config:{amounts:botIds.map(id=>$("amt"+id).value)}}});
-$("msg").textContent=error?("Error: "+error.message):(data&&data.error)?("Error: "+data.error):"amounts saved"}
+const $=i=>document.getElementById(i);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const SF=["max_mc_usd","stop_loss","max_hold_min","slippage_bps","max_dev_sol"];
-function tab(t){["target","snipe","dash","hist"].forEach(x=>$("tab-"+x).style.display=x===t?"block":"none");if(t==="snipe")buildSnipe();if(t==="dash"||t==="hist")loadDash();if(t==="target")pollPrices()}
-async function buildSnipe(){const{data:c}=await sb.from("snipe_config").select("*").single();
-if(c){SF.forEach(f=>$("s_"+f).value=c[f]??"");$("s_paper").checked=!!c.paper;$("s_social").checked=!!c.require_social}
-const{data}=await sb.from("snipe_bots").select("*").order("id");
-$("sbots").innerHTML=(data||[]).map(b=>`<tr data-id="${b.id}"><td>${b.id}</td><td title="${esc(b.pubkey)}">${esc(b.pubkey.slice(0,4))}…${esc(b.pubkey.slice(-4))}</td><td><input type="checkbox" class="en" style="width:auto" ${b.enabled?"checked":""}></td><td><input class="bs" type="number" step="0.001" placeholder="required" value="${b.buy_sol??""}"></td><td><input class="tmin" type="number" step="0.1" placeholder="required" value="${b.tp_min??""}"></td><td><input class="tmax" type="number" step="0.1" placeholder="required" value="${b.tp_max??""}"></td></tr>`).join("")}
-function sres(d,e,ok){$("smsg").textContent=e?("Error: "+e.message):(d&&d.error)?("Error: "+d.error):ok;return !e&&!(d&&d.error)}
-async function sact(action){$("smsg").textContent=action+"…";
-const{data,error}=await sb.functions.invoke("bot",{body:{action,config:{count:$("s_count").value,withdraw_to:$("s_to").value}}});
-sres(data,error,(data&&data.results&&data.results.length)?action+":\n"+data.results.join("\n"):action+" done");if(action==="snipe_setup")buildSnipe();loadDash()}
-async function snipeSave(){const cfg={paper:$("s_paper").checked,require_social:$("s_social").checked};SF.forEach(f=>cfg[f]=$("s_"+f).value);
-const bots=[...document.querySelectorAll("#sbots tr")].map(r=>({id:+r.dataset.id,enabled:r.querySelector(".en").checked,buy_sol:r.querySelector(".bs").value,tp_min:r.querySelector(".tmin").value,tp_max:r.querySelector(".tmax").value}));
-const{data,error}=await sb.functions.invoke("bot",{body:{action:"snipe_save",config:{cfg,bots}}});return sres(data,error,"settings saved")}
-const pc=n=>`<span style="color:${n>=0?"var(--ac)":"var(--rd)"}">${n>=0?"+":""}${n.toFixed(4)}</span>`;
-async function loadDash(){const[{data:b},{data:t}]=await Promise.all([sb.from("snipe_bots").select("*").order("id"),sb.from("snipe_trades").select("*").order("closed_at",{ascending:false}).limit(200)]);
-const open=(b||[]).filter(x=>x.status==="holding"||x.status==="selling"||x.status==="buying"),tr=t||[],pnl=tr.reduce((s,x)=>s+ +x.pnl_sol,0),wins=tr.filter(x=>+x.pnl_sol>0).length;
-$("dsum").innerHTML=`Open: <b>${open.length}</b> &nbsp; Closed: <b>${tr.length}</b> &nbsp; Win rate: <b>${tr.length?Math.round(wins/tr.length*100):0}%</b> &nbsp; Total PnL: <b>${pc(pnl)} SOL</b>`;
-$("dopen").innerHTML=open.map(x=>`<tr><td>${x.id}</td><td>${esc(x.symbol)} <span class="mu">${esc((x.mint||"").slice(0,4))}…</span></td><td>${x.sol_in}</td><td>${x.tp?(+x.tp).toFixed(2)+"x":"-"}</td><td>${esc(x.status)}</td><td class="mu">${esc(x.note)}</td></tr>`).join("");
-$("hrows").innerHTML=tr.map(x=>`<tr><td>${new Date(x.closed_at).toLocaleString()}</td><td>${x.bot_id}</td><td>${esc(x.symbol)}</td><td>${(+x.sol_in).toFixed(4)}</td><td>${(+x.sol_out).toFixed(4)}</td><td>${pc(+x.pnl_sol)}</td><td class="mu">${esc(x.reason)}</td><td class="mu">${x.paper?"paper":"live"}</td></tr>`).join("")}
-function ask(msg,ok,danger){return new Promise(res=>{$("mtext").textContent=msg;const b=$("mok");b.textContent=ok||"Confirm";b.className=danger?"red":"";$("modal").style.display="flex";
-const done=v=>{$("modal").style.display="none";b.onclick=null;$("mno").onclick=null;res(v)};b.onclick=()=>done(true);$("mno").onclick=()=>done(false)})}
-async function delBot(id){if(!await ask("Delete Bot "+id+"? Its private key is erased for good. Only do this if the wallet is empty.","Delete",true))return;
-$("msg").textContent="deleting…";const{data,error}=await sb.functions.invoke("bot",{body:{action:"deletebot",config:{id}}});
-$("msg").textContent=error?("Error: "+error.message):(data&&data.error)?("Error: "+data.error):"bot deleted";refresh();buildAmts()}
-start();
+const TF=["mint","tp_min","tp_max","slippage_bps","stop_loss"],SF=["max_mc_usd","stop_loss","max_hold_min","slippage_bps","max_dev_sol"];
+const col=n=>n>=0?"var(--ac)":"var(--rd)",sg=n=>n>=0?"+":"";
+const short=a=>a?a.slice(0,4)+"…"+a.slice(-4):"";
+const fmtN=n=>n>=1e6?(n/1e6).toFixed(2)+"M":n>=1e3?(n/1e3).toFixed(1)+"K":Number(n).toFixed(2);
+const pc=n=>`<span style="color:${col(n)}">${sg(n)}${n.toFixed(4)}</span>`;
+const stc=s=>s==="holding"?"var(--ac)":(s==="buying"||s==="selling")?"var(--am)":"var(--mu)";
+const set=(id,h)=>{const e=$(id);if(e)e.innerHTML=h};
+const setMsg=t=>{$("msg").textContent=t};
+let mode="target",bots=[],live={},lastIds="",polling=false,fundInfo=null,realized=0,running={target:false,snipe:false};
+
+// ---------- server calls ----------
+async function call(action,config={}){
+  const{data,error}=await sb.functions.invoke("bot",{body:{action,config:{mode,...config}}});
+  if(error){let m=error.message;try{const j=await error.context.json();if(j&&j.error)m=j.error}catch(e){}return{error:m}}
+  if(data&&data.error)return{error:data.error};
+  return data||{};
+}
+
+// ---------- pop-up ----------
+function ask(o){return new Promise(res=>{
+  const inp=$("minp"),ok=$("mok"),no=$("mno");
+  $("mtitle").textContent=o.title||"Are you sure?";$("mtext").innerHTML=o.html||"";
+  inp.style.display=o.input?"block":"none";$("mlab").textContent=o.input?o.input.label:"";if(o.input)inp.value=o.input.value||"";
+  ok.style.display=o.ok?"inline-block":"none";ok.textContent=o.ok||"";ok.className=o.danger?"red":"";no.textContent=o.cancel||"Cancel";
+  $("modal").style.display="flex";
+  const done=v=>{$("modal").style.display="none";ok.onclick=null;no.onclick=null;res(v)};
+  ok.onclick=()=>done(o.input?{value:inp.value}:true);no.onclick=()=>done(false);
+})}
+
+// ---------- login / boot ----------
+async function login(){const{error}=await sb.auth.signInWithPassword({email:$("em").value,password:$("pw").value});if(error)return alert(error.message);boot()}
+async function logout(){await sb.auth.signOut();location.reload()}
+async function boot(){const{data:{session}}=await sb.auth.getSession();if(!session)return;
+  $("login").style.display="none";$("app").style.display="block";
+  setMode("target");getFund();
+  setInterval(refresh,4000);setInterval(pollLive,6000);setInterval(loadHist,12000)}
+
+// ---------- mode toggle ----------
+function setMode(m){
+  mode=m;live={};lastIds="";bots=[];$("lines").innerHTML="";$("sum").textContent="";setMsg("");
+  $("tgt").style.display=m==="target"?"block":"none";$("snp").style.display=m==="snipe"?"block":"none";$("hist").style.display=m==="snipe"?"block":"none";
+  $("m-target").className=m==="target"?"":"gr";$("m-snipe").className=m==="snipe"?"":"gr";
+  $("stitle").textContent=m==="snipe"?"⚡ Sniper — buys brand-new pump.fun tokens that fit the settings, one bot per token":"🎯 Target — every bot buys one specific token (CA)";
+  loadCfg();refresh();pollLive();loadHist();
+}
+async function loadCfg(){
+  const m=mode,{data:c}=await sb.from(m==="snipe"?"snipe_config":"bot_config").select("*").eq("id",1).single();
+  if(m!==mode||!c)return;
+  if(m==="target")TF.forEach(f=>$("t_"+f).value=c[f]??"");
+  else{SF.forEach(f=>$("s_"+f).value=c[f]??"");$("s_paper").checked=!!c.paper;$("s_social").checked=!!c.require_social}
+}
+
+// ---------- refresh bots ----------
+async function refresh(){
+  const m=mode;
+  const[{data:b},{data:ct},{data:cs}]=await Promise.all([sb.from(m==="snipe"?"snipe_bots":"bots").select("*").order("id"),sb.from("bot_config").select("running").eq("id",1).single(),sb.from("snipe_config").select("running").eq("id",1).single()]);
+  running={target:!!(ct&&ct.running),snipe:!!(cs&&cs.running)};
+  const tag=(n,r)=>r?`<span style="color:var(--ac)">● ${n} RUNNING</span>`:`<span class="mu">■ ${n} stopped</span>`;
+  $("run").innerHTML=tag("Target",running.target)+" &nbsp; "+tag("Sniper",running.snipe);
+  if(m!==mode||!b)return;
+  bots=b;const ids=b.map(x=>x.id).join(",");
+  if(ids!==lastIds){lastIds=ids;buildBots()}else updateCells();
+}
+function lineHtml(b){const sn=mode==="snipe";return `<div class="bot" data-id="${b.id}">
+<div class="bh"><b>#${b.id}</b><span class="mono" title="${esc(b.pubkey)}">${esc(short(b.pubkey))}</span>
+<button class="gr sm" title="Copy wallet address" onclick="copyAddr('${esc(b.pubkey)}',this)">📋</button>
+<span class="badge" id="st${b.id}"></span>${sn?`<label class="mu"><input type="checkbox" class="en" ${b.enabled?"checked":""}>On</label>`:""}
+<span style="flex:1"></span>
+<button class="sm" title="Add / transfer SOL to this wallet" onclick="fundOne(${b.id})">➕</button>
+<button class="red sm" title="Remove this bot" onclick="delBot(${b.id})">🗑️</button></div>
+<div class="row">
+<div class="cell">Buy SOL<input class="bs" type="number" step="0.001" min="0" placeholder="none"></div>
+<div class="cell">Sell min (x)<input class="tmin" type="number" step="0.1" placeholder="${sn?"required":"default"}"></div>
+<div class="cell">Sell max (x)<input class="tmax" type="number" step="0.1" placeholder="${sn?"required":"default"}"></div>
+<div class="cell">Wallet balance<div class="v" id="bal${b.id}">-</div></div>
+<div class="cell">MC entered<div class="v" id="mc${b.id}">-</div></div>
+<div class="cell">Holding<div class="v" id="hold${b.id}">-</div></div>
+<div class="cell">PnL (SOL)<div class="v" id="pnl${b.id}">-</div></div>
+</div>
+<div class="note mu" id="nt${b.id}"></div>
+<div class="opt"><label><input type="checkbox" class="usl">Stop loss %</label><input class="slp" type="number" step="1" min="1" max="99" placeholder="e.g. 30">
+<label><input type="checkbox" class="utp">Take profit %</label><input class="tpp" type="number" step="1" min="1" placeholder="e.g. 100"></div>
+</div>`}
+function collectBots(){return[...document.querySelectorAll("#lines .bot")].map(r=>({
+  id:+r.dataset.id,enabled:r.querySelector(".en")?r.querySelector(".en").checked:true,
+  buy_sol:r.querySelector(".bs").value,tp_min:r.querySelector(".tmin").value,tp_max:r.querySelector(".tmax").value,
+  use_sl:r.querySelector(".usl").checked,sl_pct:r.querySelector(".slp").value,use_tp:r.querySelector(".utp").checked,tp_pct:r.querySelector(".tpp").value}))}
+function buildBots(){
+  const keep={};collectBots().forEach(x=>keep[x.id]=x); // keep unsaved edits when the list changes
+  $("lines").innerHTML=bots.length?bots.map(lineHtml).join(""):'<div class="mu">No bots yet — click "Add bot".</div>';
+  document.querySelectorAll("#lines .bot").forEach(r=>{
+    const id=+r.dataset.id,b=bots.find(x=>x.id===id)||{},k=keep[id];
+    r.querySelector(".bs").value=k?k.buy_sol:(b.buy_sol??"");
+    r.querySelector(".tmin").value=k?k.tp_min:(b.tp_min??"");
+    r.querySelector(".tmax").value=k?k.tp_max:(b.tp_max??"");
+    r.querySelector(".usl").checked=k?k.use_sl:!!b.use_sl;r.querySelector(".slp").value=k?k.sl_pct:(b.sl_pct??"");
+    r.querySelector(".utp").checked=k?k.use_tp:!!b.use_tp;r.querySelector(".tpp").value=k?k.tp_pct:(b.tp_pct??"");
+    if(k&&r.querySelector(".en"))r.querySelector(".en").checked=k.enabled;
+  });
+  updateCells();
+}
+function updateCells(){
+  let wal=0,ent=0,val=0,n=0;
+  bots.forEach(b=>{
+    const l=live[b.id]||{},sin=+b.sol_in||0,hold=b.status==="holding"||b.status==="selling";
+    if(l.sol!=null)wal+=l.sol;
+    let hh="-",pp="-";
+    if(hold){
+      hh=l.tokens!=null?fmtN(l.tokens)+(l.value!=null?` ≈ ${l.value.toFixed(4)} SOL`:""):"…";
+      if(l.value!=null&&sin>0){const d=l.value-sin;ent+=sin;val+=l.value;n++;pp=`<span style="color:${col(d)}">${sg(d)}${d.toFixed(4)} (${sg(d)}${(d/sin*100).toFixed(1)}%)</span>`}
+    }else if(b.last_pnl!=null)pp=`${pc(+b.last_pnl)} <span class="mu">last</span>`;
+    set("st"+b.id,`<span style="color:${stc(b.status)}">${esc(b.status)}</span>`);
+    set("bal"+b.id,l.sol!=null?l.sol.toFixed(4)+" SOL":"-");
+    set("mc"+b.id,b.mc_entry!=null&&hold?"$"+fmtN(+b.mc_entry):"-");
+    set("hold"+b.id,hh);set("pnl"+b.id,pp);
+    set("nt"+b.id,esc(b.note||""));
+  });
+  const d=val-ent;
+  $("sum").innerHTML=`Bots <b>${bots.length}</b> · Wallet SOL <b>${wal.toFixed(4)}</b>`+(n?` · Holding <b>${n}</b> (in ${ent.toFixed(4)} → now ${val.toFixed(4)} SOL) · Open PnL <b style="color:${col(d)}">${sg(d)}${d.toFixed(4)} SOL (${sg(d)}${(d/ent*100).toFixed(1)}%)</b>`:"")+(mode==="snipe"?` · Realized PnL <b>${pc(realized)} SOL</b>`:"");
+}
+async function pollLive(){
+  if(polling||document.hidden)return;polling=true;const m=mode;
+  try{const r=await call("live");if(!r.error&&r.rows&&m===mode){live=r.rows;updateCells()}}catch(e){}
+  polling=false;
+}
+async function copyAddr(a,btn){
+  try{await navigator.clipboard.writeText(a)}catch(e){const t=document.createElement("textarea");t.value=a;document.body.appendChild(t);t.select();document.execCommand("copy");t.remove()}
+  const o=btn.textContent;btn.textContent="✅";setTimeout(()=>btn.textContent=o,1200);
+}
+
+// ---------- save / start / stop / sell all ----------
+async function saveAll(){
+  setMsg("saving…");let r;
+  if(mode==="target"){const c={};TF.forEach(f=>c[f]=$("t_"+f).value);r=await call("save",c)}
+  else{const cfg={paper:$("s_paper").checked,require_social:$("s_social").checked};SF.forEach(f=>cfg[f]=$("s_"+f).value);r=await call("snipe_save",{cfg})}
+  if(r.error){setMsg("Error: "+r.error);return false}
+  r=await call("bots_save",{bots:collectBots()});
+  if(r.error){setMsg("Error: "+r.error);return false}
+  setMsg("settings saved");return true;
+}
+async function saveBots(){setMsg("saving…");const r=await call("bots_save",{bots:collectBots()});setMsg(r.error?"Error: "+r.error:"bot settings saved");refresh()}
+async function startBots(){
+  const funded=collectBots().filter(b=>+b.buy_sol>0).length;
+  const html=mode==="snipe"
+    ?`The sniper will watch for new pump.fun tokens and buy with every <b>enabled</b> bot that has a Buy SOL and a sell range (or TP %).<br>Mode: <b>${$("s_paper").checked?"PAPER (simulated)":"LIVE — real SOL"}</b>`
+    :`<b>${funded}</b> bot(s) with a Buy SOL amount will buy this token <b>immediately</b> with real SOL:<br><span class="mono">${esc($("t_mint").value)}</span>`;
+  if(!await ask({title:"Start "+(mode==="snipe"?"Sniper":"Target")+" bots?",html,ok:"Proceed"}))return;
+  if(!await saveAll())return;
+  setMsg("starting…");const r=await call(mode==="snipe"?"snipe_run":"run");
+  setMsg(r.error?"Error: "+r.error:"started");refresh();pollLive();
+}
+async function stopBots(){const r=await call(mode==="snipe"?"snipe_stop":"stop");setMsg(r.error?"Error: "+r.error:"stopped — open positions keep being watched for take-profit / stop-loss");refresh()}
+async function sellAll(){
+  const open=bots.filter(b=>["holding","selling","buying"].includes(b.status)).length;
+  if(!await ask({title:"Sell ALL holdings?",html:`Stops the ${mode} bots, then sells every token held by every ${mode} bot wallet back to SOL <b>right now</b>, even if the target isn't reached.<br><br>Bots with open positions: <b>${open}</b>`,ok:"Sell ALL",danger:true}))return;
+  setMsg("selling…");const r=await call(mode==="snipe"?"snipe_sellall":"sellall");
+  setMsg(r.error?"Error: "+r.error:"sell all:\n"+(r.results||[]).join("\n"));refresh();pollLive();loadHist();
+}
+
+// ---------- add / remove bot ----------
+async function addBot(){setMsg("adding bot…");const r=await call("addbot");setMsg(r.error?"Error: "+r.error:"bot added");refresh()}
+async function delBot(id){
+  const b=bots.find(x=>x.id===id);if(!b)return;
+  if(!await ask({title:"Remove Bot "+id+"?",html:`This permanently deletes the wallet and erases its private key:<br><span class="mono">${esc(b.pubkey)}</span><br><br>Only continue if it is empty — the server refuses if it still holds SOL or tokens (use <b>Withdraw</b> first).`,ok:"Remove",danger:true}))return;
+  setMsg("removing…");const r=await call("deletebot",{id});setMsg(r.error?"Error: "+r.error:"bot removed");refresh();
+}
+
+// ---------- funding wallet ----------
+async function getFund(){const r=await call("fund_info");if(r.error){setMsg("Error: "+r.error);return null}fundInfo=r;renderFund();return r}
+function renderFund(){const f=fundInfo;
+  set("fstat",f&&f.address?`Funding wallet: <span class="mono">${esc(f.address)}</span> <button class="gr sm" onclick="copyAddr('${esc(f.address)}',this)">📋</button><br>Balance: <b>${f.balance.toFixed(4)} SOL</b> <span class="mu">— deposit SOL to this address to fill it</span>`:`<span class="mu">No funding wallet saved yet.</span>`);
+}
+async function saveFunding(){
+  const secret=$("fkey").value.trim();if(!secret)return setMsg("Error: paste a seed phrase or private key first");
+  if(!await ask({title:"Save funding wallet?",html:`The key is sent over HTTPS to your Supabase Edge Function and stored in your <b>funding_key</b> table (readable only by the service role). A seed phrase is converted to a private key — the phrase itself is <b>not</b> stored.<br><br><b>Use a dedicated wallet</b> holding only the SOL you want the bots to trade.`,ok:"Save",danger:true}))return;
+  const r=await call("fund_set",{secret,index:$("fidx").value||"0"});$("fkey").value="";
+  if(r.error)return setMsg("Error: "+r.error);
+  setMsg("Funding wallet saved: "+r.address+"\nCheck this matches the wallet you expect (for seed phrases, change Account # if it doesn't).");await getFund();
+}
+async function clearFunding(){
+  if(!await ask({title:"Remove funding key?",html:"Deletes the saved key from your database. Any SOL in that wallet stays there — you keep your own copy of the key.",ok:"Remove",danger:true}))return;
+  const r=await call("fund_clear");setMsg(r.error?"Error: "+r.error:"funding key removed");await getFund();
+}
+async function fundOne(id){const r=await ask({title:"Add SOL to Bot "+id,html:"How much SOL should the funding wallet send to this bot? (minimum 0.001)",input:{label:"Amount (SOL)",value:"0.03"},ok:"Review"});if(r)reviewFund([{id,sol:+r.value}])}
+async function fundAll(){
+  if(!bots.length)return setMsg("Error: no bots in this mode yet");
+  const r=await ask({title:"Distribute to all "+mode+" bots",html:`SOL to send to <b>each</b> of the ${bots.length} bots (minimum 0.001):`,input:{label:"SOL per bot",value:"0.03"},ok:"Review"});
+  if(r)reviewFund(bots.map(b=>({id:b.id,sol:+r.value})));
+}
+async function reviewFund(t){
+  if(t.some(x=>!(x.sol>=0.001)))return setMsg("Error: amount must be at least 0.001 SOL");
+  const f=await getFund();if(!f)return;
+  if(!f.address)return setMsg("Error: save a funding wallet first (Funding wallet card)");
+  const total=t.reduce((s,x)=>s+x.sol,0),fee=Math.ceil(t.length/8)*0.000005,left=f.balance-total-fee;
+  const lines=t.map(x=>{const b=bots.find(y=>y.id===x.id);return `<tr><td>Bot ${x.id}</td><td class="mono">${esc(short(b&&b.pubkey))}</td><td>${x.sol} SOL</td></tr>`}).join("");
+  const html=`From: <span class="mono">${esc(short(f.address))}</span> (balance ${f.balance.toFixed(4)} SOL)
+<table><thead><tr><th>To</th><th>Wallet</th><th>Amount</th></tr></thead><tbody>${lines}</tbody></table>
+Total: <b>${total.toFixed(4)} SOL</b> · network fee ≈ ${fee.toFixed(6)} SOL<br>Funding wallet after: <b style="color:${left<0?"var(--rd)":"var(--ac)"}">${left.toFixed(4)} SOL</b>${left<0?"<br><br><b style='color:var(--rd)'>Not enough SOL in the funding wallet.</b>":""}`;
+  if(!await ask({title:left<0?"Not enough SOL":"Confirm transfer",html,ok:left<0?null:"Proceed",cancel:left<0?"Close":"Cancel"})||left<0)return;
+  setMsg("sending…");const r=await call("fund",{targets:t});
+  setMsg(r.error?"Error: "+r.error:"funding:\n"+(r.results||[]).join("\n"));getFund();pollLive();
+}
+
+// ---------- withdraw everything ----------
+async function withdrawAll(){
+  const to=$("withdraw_to").value.trim();if(to.length<32)return setMsg("Error: enter your wallet address in the Withdraw box first");
+  const sol=Object.values(live).reduce((s,x)=>s+(x.sol||0),0);
+  if(!await ask({title:"Withdraw everything?",html:`Stops the ${mode} bots, then moves <b>all SOL and all tokens</b> from the <b>${bots.length}</b> ${mode} bot wallet(s) (≈ ${sol.toFixed(4)} SOL in total) to:<br><span class="mono">${esc(to)}</span><br><br>Open positions are moved as tokens (not sold) and their tracking is cleared. Bots in the middle of a buy/sell are skipped. <b>This cannot be undone.</b>`,ok:"Withdraw",danger:true}))return;
+  setMsg("withdrawing…");const r=await call("withdraw",{withdraw_to:to});
+  setMsg(r.error?"Error: "+r.error:"withdraw:\n"+(r.results||[]).join("\n"));refresh();pollLive();
+}
+
+// ---------- sniper history ----------
+async function loadHist(){
+  if(mode!=="snipe")return;
+  const{data:t}=await sb.from("snipe_trades").select("*").order("closed_at",{ascending:false}).limit(200);
+  if(mode!=="snipe")return;
+  const tr=t||[];realized=tr.reduce((s,x)=>s+ +x.pnl_sol,0);
+  $("hrows").innerHTML=tr.map(x=>`<tr><td>${new Date(x.closed_at).toLocaleString()}</td><td>${x.bot_id}</td><td>${esc(x.symbol)}</td><td>${(+x.sol_in).toFixed(4)}</td><td>${(+x.sol_out).toFixed(4)}</td><td>${pc(+x.pnl_sol)}</td><td class="mu">${esc(x.reason)}</td><td class="mu">${x.paper?"paper":"live"}</td></tr>`).join("");
+  updateCells();
+}
+boot();
 </script></body></html>
