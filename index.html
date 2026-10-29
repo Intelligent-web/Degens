@@ -83,7 +83,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;borde
   <button class="red" onclick="withdrawAll()">Withdraw</button>
 </div>
 
-<div class="card w" id="hist" style="display:none"><b>Sniper trade history</b> <span class="mu">— PnL = real wallet change incl. fees</span>
+<div class="card w" id="hist" style="display:none"><b id="htitle">Trade history</b> <span class="mu">— closed trades with PnL (SOL, net of fees)</span>
   <table><thead><tr><th>Closed</th><th>Bot</th><th>Token</th><th>In</th><th>Out</th><th>PnL (SOL)</th><th>Why</th><th></th></tr></thead><tbody id="hrows"></tbody></table>
 </div>
 </div>
@@ -142,7 +142,7 @@ async function boot(){const{data:{session}}=await sb.auth.getSession();if(!sessi
 // ---------- mode toggle ----------
 function setMode(m){
   mode=m;live={};lastIds="";bots=[];$("lines").innerHTML="";$("sum").textContent="";setMsg("");
-  $("tgt").style.display=m==="target"?"block":"none";$("snp").style.display=m==="snipe"?"block":"none";$("hist").style.display=m==="snipe"?"block":"none";
+  $("tgt").style.display=m==="target"?"block":"none";$("snp").style.display=m==="snipe"?"block":"none";$("hist").style.display="block";realized=0;$("hrows").innerHTML="";
   $("m-target").className=m==="target"?"":"gr";$("m-snipe").className=m==="snipe"?"":"gr";
   $("stitle").textContent=m==="snipe"?"⚡ Sniper — buys brand-new pump.fun tokens that fit the settings, one bot per token":"🎯 Target — every bot buys one specific token (CA)";
   loadCfg();refresh();pollLive();loadHist();
@@ -220,7 +220,7 @@ function updateCells(){
     set("nt"+b.id,esc(b.note||""));
   });
   const d=val-ent;
-  $("sum").innerHTML=`Bots <b>${bots.length}</b> · Wallet SOL <b>${wal.toFixed(4)}</b>`+(n?` · Holding <b>${n}</b> (in ${ent.toFixed(4)} → now ${val.toFixed(4)} SOL) · Open PnL <b style="color:${col(d)}">${sg(d)}${d.toFixed(4)} SOL (${sg(d)}${(d/ent*100).toFixed(1)}%)</b>`:"")+(mode==="snipe"?` · Realized PnL <b>${pc(realized)} SOL</b>`:"");
+  $("sum").innerHTML=`Bots <b>${bots.length}</b> · Wallet SOL <b>${wal.toFixed(4)}</b>`+(n?` · Holding <b>${n}</b> (in ${ent.toFixed(4)} → now ${val.toFixed(4)} SOL) · Open PnL <b style="color:${col(d)}">${sg(d)}${d.toFixed(4)} SOL (${sg(d)}${(d/ent*100).toFixed(1)}%)</b>`:"")+` · Realized PnL <b>${pc(realized)} SOL</b>`;
 }
 async function pollLive(){
   if(polling||document.hidden)return;polling=true;const m=mode;
@@ -316,11 +316,12 @@ async function withdrawAll(){
 
 // ---------- sniper history ----------
 async function loadHist(){
-  if(mode!=="snipe")return;
-  const{data:t}=await sb.from("snipe_trades").select("*").order("closed_at",{ascending:false}).limit(200);
-  if(mode!=="snipe")return;
+  const m=mode,sn=m==="snipe";
+  const{data:t}=await sb.from(sn?"snipe_trades":"bot_trades").select("*").order("closed_at",{ascending:false}).limit(200);
+  if(m!==mode)return;
+  $("htitle").textContent=sn?"Sniper trade history":"Target trade history";
   const tr=t||[];realized=tr.reduce((s,x)=>s+ +x.pnl_sol,0);
-  $("hrows").innerHTML=tr.map(x=>`<tr><td>${new Date(x.closed_at).toLocaleString()}</td><td>${x.bot_id}</td><td>${esc(x.symbol)}</td><td>${(+x.sol_in).toFixed(4)}</td><td>${(+x.sol_out).toFixed(4)}</td><td>${pc(+x.pnl_sol)}</td><td class="mu">${esc(x.reason)}</td><td class="mu">${x.paper?"paper":"live"}</td></tr>`).join("");
+  $("hrows").innerHTML=tr.length?tr.map(x=>`<tr><td>${new Date(x.closed_at).toLocaleString()}</td><td>${x.bot_id}</td><td>${esc(x.symbol||short(x.mint))}</td><td>${(+x.sol_in).toFixed(4)}</td><td>${(+x.sol_out).toFixed(4)}</td><td>${pc(+x.pnl_sol)}</td><td class="mu">${esc(x.reason)}</td><td class="mu">${sn?(x.paper?"paper":"live"):""}</td></tr>`).join(""):'<tr><td colspan="8" class="mu">No closed trades yet.</td></tr>';
   updateCells();
 }
 boot();
